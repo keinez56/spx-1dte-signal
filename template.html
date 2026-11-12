@@ -52,6 +52,13 @@ header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:1
 .pill.hi{background:var(--sell-bg);color:var(--sell)} .pill.lo{background:var(--small-bg);color:var(--small)}
 .chk .t{font-weight:500} .chk .v{font-family:var(--f-mono);font-size:.85rem} .chk .note{grid-column:2;font-size:.78rem;color:var(--muted)}
 .warn{font-size:.85rem;color:var(--small);}
+.refresh{display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:100%}
+.refresh button{font:inherit;font-size:.85rem;font-weight:600;font-family:var(--f-display);padding:6px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--panel);cursor:pointer}
+.refresh button:disabled{opacity:.55;cursor:wait}
+.refresh button:focus-visible,.refresh input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.refresh input{font:inherit;font-size:.82rem;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);min-width:0;width:220px;max-width:60vw}
+.refresh label{font-size:.78rem;color:var(--muted)}
+@media (max-width:720px){.refresh{align-items:flex-start}}
 /* tables */
 .tbl{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:.88rem}
@@ -79,7 +86,15 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
       <div class="eyebrow">SPX 隔日到期賣 put · 每日收盤後更新</div>
       <h1>SPX 1DTE 賣 Put 訊號台</h1>
     </div>
-    <div class="muted" id="gen" style="font-size:.82rem"></div>
+    <div class="refresh">
+      <div class="muted" id="gen" style="font-size:.82rem"></div>
+      <button type="button" id="btn-refresh">強制更新</button>
+      <div id="rf-box" hidden>
+        <label for="rf-token">第一次使用：貼上 GitHub token（只存在這台裝置的瀏覽器）</label>
+        <div style="display:flex;gap:6px"><input id="rf-token" type="password" autocomplete="off" placeholder="github_pat_…"><button type="button" id="rf-save">儲存並更新</button></div>
+      </div>
+      <div id="rf-msg" class="muted" style="font-size:.8rem"></div>
+    </div>
   </header>
 
   <section>
@@ -222,4 +237,38 @@ function renderBT(){
 }
 try{renderToday()}catch(e){console.error(e)}
 try{renderBT()}catch(e){console.error(e)}
+
+// 強制更新：用存在本機瀏覽器的 GitHub token 觸發 Actions（force=yes），再等新的 signal.json 出現後重新整理
+(function(){
+  const REPO='keinez56/spx-1dte-signal', WF='daily.yml', KEY='spx_gh_token';
+  const btn=$('#btn-refresh'), box=$('#rf-box'), msg=$('#rf-msg'), inp=$('#rf-token');
+  if(!btn) return;
+  const getTok=()=>{try{return localStorage.getItem(KEY)||''}catch(e){return ''}};
+  const setTok=t=>{try{t?localStorage.setItem(KEY,t):localStorage.removeItem(KEY)}catch(e){}};
+  const say=t=>{msg.textContent=t};
+  async function dispatch(tok){
+    btn.disabled=true; say('送出中…');
+    try{
+      const r=await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WF}/dispatches`,{method:'POST',
+        headers:{'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'},
+        body:JSON.stringify({ref:'main',inputs:{force:'yes'}})});
+      if(r.status===204){box.hidden=true; say('已送出，GitHub 約 1–2 分鐘跑完，好了會自動重新整理。'); waitNew(); return;}
+      if(r.status===401||r.status===403||r.status===404){setTok(''); box.hidden=false; say('token 無效或權限不足（需要這個 repo 的 Actions 讀寫權限），請重新貼上。');}
+      else say('GitHub 回應 '+r.status+'，請稍後再試。');
+    }catch(e){say('連不到 GitHub：'+e.message)}
+    btn.disabled=false;
+  }
+  async function waitNew(){
+    const old=SG&&SG.generated; const t0=Date.now();
+    while(Date.now()-t0<5*60*1000){
+      await new Promise(r=>setTimeout(r,15000));
+      try{const s=await (await fetch('signal.json?t='+Date.now(),{cache:'no-store'})).json();
+        if(s.generated!==old){say('已更新，重新整理中…'); location.reload(); return;}}catch(e){}
+      say('GitHub 執行中…（已等 '+Math.round((Date.now()-t0)/1000)+' 秒）');
+    }
+    btn.disabled=false; say('等了 5 分鐘還沒看到新版本，請到 GitHub 的 Actions 頁面看執行結果。');
+  }
+  btn.addEventListener('click',()=>{const t=getTok(); if(t) dispatch(t); else {box.hidden=false; inp.focus(); say('');}});
+  $('#rf-save').addEventListener('click',()=>{const t=inp.value.trim(); if(!t){say('請先貼上 token');return;} setTok(t); inp.value=''; dispatch(t);});
+})();
 </script>

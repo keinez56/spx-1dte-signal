@@ -80,6 +80,11 @@ def main():
     intraday = yf.download("^GSPC", period="1d", interval="1m", auto_adjust=False, progress=False, multi_level_index=False)
     px_now = float(intraday["Close"].iloc[-1]) if not intraday.empty else float(daily["Close"].iloc[-1])
     px_time = intraday.index[-1].tz_convert(ET).strftime("%Y-%m-%d %H:%M ET") if not intraday.empty else None
+    # 收盤後（16:05 ET 以後）或休市日：改用官方收盤價（含收盤競價），不用最後一分鐘的成交價
+    last_day = daily.index[-1]
+    if (now_et.time() >= time(16, 5) and last_day == today) or not is_trading:
+        px_now = float(daily["Close"].iloc[-1])
+        px_time = f"{last_day:%Y-%m-%d} 官方收盤"
 
     closes = daily["Close"].copy()
     if is_trading:

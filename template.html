@@ -130,13 +130,13 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
   <section>
     <h2>執行規則</h2>
     <div class="panel" style="display:flex;flex-direction:column;gap:14px">
-      <p style="margin:0">每個交易日用 SPX 官方收盤價和 ES 當日 K 棒判斷一次（網頁約在美東 16:15 更新，台灣冬令 05:15、夏令 04:15），賣「下一個交易日到期」的 SPX put 1 口，賣在 bid，持有到結算。依序檢查，碰到第一條不做就停：</p>
+      <p style="margin:0">每個交易日用 SPX 官方收盤價和當日 K 棒判斷一次（網頁約在美東 16:15 更新，台灣冬令 05:15、夏令 04:15），賣「下一個交易日到期」的 SPX put 1 口，賣在 bid，持有到結算。依序檢查，碰到第一條不做就停：</p>
       <ol class="rules">
         <li><b>R1 事件日不做</b>：到期日當天有 CPI、非農（NFP）或 FOMC 利率決議。</li>
         <li><b>R2 太平靜不做</b>：10 日已實現波動低於 9%（最近 10 個日對數報酬的標準差 × √252，今天用當下價格）。</li>
         <li><b>R3 反彈陷阱不做</b>：今天漲超過 1.5%，但價格仍在 20 日均線之下。</li>
         <li><b>R4 分層</b>：價格比 20 日均線高 1% 以上賣 30Δ，否則賣 4Δ。</li>
-        <li><b>R5 ES 收低檔降級</b>：ES 期貨當日 K 棒（前一天 18:00 ET 起）收在振幅最低 30%，R4 的 30Δ 降為 4Δ。</li>
+        <li><b>R5 收低檔降級</b>：SPX 現貨當日 K 棒收在振幅最低 30%，R4 的 30Δ 降為 4Δ。（原本用 ES 期貨，改用現貨後回測幾乎相同：Sharpe 3.62 對 3.68，前後兩段更一致。）</li>
       </ol>
       <p style="margin:0" class="muted">部位：每 SPX×20 美元保證金 1 口，不因 IV 調口數，不停損。被履約時當天平掉，不抱期貨等回本（回測抱 5 天的回撤從 75 點變 500 點以上）。手續費每口 2.82 美元已扣。</p>
     </div>
@@ -202,7 +202,7 @@ function renderBT(){
   $('#yearly').innerHTML='<thead><tr><th>年</th>'+b.summary.map(s=>`<th class="n">${esc(s.name.split('（')[0])}</th>`).join('')+'</tr></thead><tbody>'+
     years.map(y=>'<tr><td class="mono">'+y+'</td>'+order.map(k=>{const v=b.yearly[k][y];return v?`<td class="n ${v[1]<0?'neg':''}">${v[1].toFixed(0)} <span class="muted">(${v[0]})</span></td>`:'<td class="n">–</td>'}).join('')+'</tr>').join('')+'</tbody>';
   $('#abl tbody').innerHTML=b.ablation.map((s,i)=>`<tr${i===0?' class="hl"':''}><td>${esc(s.name)}</td><td class="n">${s.n}</td><td class="n">${s.total.toFixed(0)}</td><td class="n neg">${s.maxdd.toFixed(0)}</td><td class="n">${f2(s.sharpe)}</td></tr>`).join('');
-  const cn={R4H:'乖離 ≥1% 賣 30Δ',R4L:'乖離 <1% 賣 4Δ',R5:'ES 收低檔降為 4Δ'};
+  const cn={R4H:'乖離 ≥1% 賣 30Δ',R4L:'乖離 <1% 賣 4Δ',R5:'收低檔降為 4Δ'};
   $('#bycode tbody').innerHTML=b.by_code.map(r=>`<tr><td>${cn[r.code]||r.code}</td><td class="n">${r.count}</td><td class="n">${f2(r.mean)}</td><td class="n">${r.sum.toFixed(0)}</td></tr>`).join('');
   $('#worst tbody').innerHTML=b.worst.map(w=>`<tr><td class="mono">${w.date}</td><td class="n">${dlab(w.delta)}</td><td class="n">${w.strike.toFixed(0)}</td><td class="n">${f2(w.bid)}</td><td class="n">${f2(w.settle)}</td><td class="n neg">${f1(w.pnl)}</td></tr>`).join('');
   if(!window.Chart) return;

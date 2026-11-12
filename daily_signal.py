@@ -1,7 +1,7 @@
 """每日訊號：收盤前（約 15:45 ET）用 Yahoo 即時價算 R1–R5，輸出 output/signal.json。
 
 今天的價格用 ^GSPC 最新一分鐘價；過去日子用官方收盤。
-ES 收盤位置用 ES=F 從前一天 18:00 ET 開盤到現在的高低。
+R5 收盤位置用 SPX 現貨當日高低（使用者經驗：看現貨比 ES 準，回測兩者幾乎相同）。
 建議履約價是估算（依回測：價外% ≈ 係數 × VIX），下單請以券商顯示的 delta 為準。
 """
 import json
@@ -96,10 +96,17 @@ def main():
     ind = indicators(closes)
     row = ind.loc[sig_day]
     expiry = next_trading_day(sig_day)
-    es_pos, es_info = es_session_pos(now_et) if is_trading else (np.nan, None)
-    if not np.isfinite(es_pos) and sig_day in es_daily.index:
-        b = es_daily.loc[sig_day]
-        es_pos = float((b["Close"] - b["Low"]) / (b["High"] - b["Low"]))
+    # R5：SPX 現貨當日 K 棒（09:30–16:00）收盤位置
+    if sig_day in daily.index:
+        b = daily.loc[sig_day]
+        hi, lo = float(b["High"]), float(b["Low"])
+    elif not intraday.empty:
+        hi, lo = float(intraday["High"].max()), float(intraday["Low"].min())
+    else:
+        hi = lo = np.nan
+    hi, lo = max(hi, px_now), min(lo, px_now)
+    es_pos = float((px_now - lo) / (hi - lo)) if hi > lo else np.nan
+    es_info = dict(high=hi, low=lo, last=px_now)
     delta, code, why = decide(row, expiry, es_pos)
 
     est = None
@@ -118,16 +125,16 @@ def main():
              note="漲 > 1.5% 且在 20 日均線下不做"),
         dict(rule="R4 分層", value=f"乖離 {row['bias']:+.2%}（20MA {row['ma20']:.0f}）",
              hit=bool(row["bias"] >= PARAMS["bias_hi"]), note="乖離 ≥ 1% 賣 30Δ，否則 4Δ"),
-        dict(rule="R5 ES 收低檔", value=(f"{es_pos:.0%}" if np.isfinite(es_pos) else "無資料"),
+        dict(rule="R5 收低檔", value=(f"{es_pos:.0%}" if np.isfinite(es_pos) else "無資料"),
              hit=bool(np.isfinite(es_pos) and es_pos < PARAMS["es_low_pos"]),
-             note="ES 收在當日振幅最低 30% → 30Δ 降為 4Δ"),
+             note="SPX 現貨收在當日振幅最低 30% → 30Δ 降為 4Δ"),
     ]
     out = dict(
         generated=now_et.strftime("%Y-%m-%d %H:%M ET"), signal_day=f"{sig_day:%Y-%m-%d}",
         expiry=f"{expiry:%Y-%m-%d}", is_trading_day=is_trading, early_close=bool(sig_day in EARLY_CLOSE),
         action="SELL" if delta else "SKIP", delta=delta, code=code, why=why,
         spx=px_now, spx_time=px_time, vix=vix_now, est=est, es=es_info, checks=checks,
-        history=history_signals(daily, es_daily),
+        history=history_signals(daily, daily),
         upcoming_events=[dict(date=f"{d:%Y-%m-%d}", event=v) for d, v in sorted(EVENTS.items())
                          if today <= d <= today + pd.Timedelta(days=45)],
     )

@@ -64,7 +64,8 @@ def main():
     spot = pd.read_parquet(CACHE / "spx_spot.parquet").set_index("date")["spot"].sort_index()
     chain = load_chain()
     close = yf["spx"]["Close"]
-    es = yf["es"]
+    import os
+    es = yf[os.environ.get("R5_SRC", "spx")]  # R5 用哪個日 K：es（ES 期貨）或 spx（現貨）
     es_pos = ((es["Close"] - es["Low"]) / (es["High"] - es["Low"])).replace([np.inf, -np.inf], np.nan)
 
     ind = indicators(spot)
@@ -149,7 +150,7 @@ def main():
     # 規則消融：一次拿掉一條
     abl = []
     for nm, mod in (("全部規則", {}), ("拿掉 R2（太平靜）", dict(rv_min=-1)),
-                    ("拿掉 R3（反彈陷阱）", dict(rebound_ret=9)), ("拿掉 R5（ES 收低檔）", dict(es_low_pos=-1))):
+                    ("拿掉 R3（反彈陷阱）", dict(rebound_ret=9)), ("拿掉 R5（收低檔）", dict(es_low_pos=-1))):
         p = dict(PARAMS, **mod)
         rs = []
         for i, d in enumerate(days[:-1]):
@@ -170,6 +171,10 @@ def main():
             rs.append(dict(date=d, pnl=r["pBidPx"] - max(r["strike"] - settle, 0) - p["fee_pts"]))
         abl.append(stats(pd.DataFrame(rs), nm))
     out["ablation"] = abl
+    if os.environ.get("NO_WRITE"):
+        for s_ in out["summary"] + abl:
+            print({k: (round(v, 3) if isinstance(v, float) else v) for k, v in s_.items() if k in ("name","n","total","maxdd","worst","sharpe","sharpe_h1","sharpe_h2","cagr_100k")})
+        return
     (OUT / "backtest.json").write_text(json.dumps(out, ensure_ascii=False, default=str), encoding="utf-8")
     f.to_csv(OUT / "trades_final.csv", index=False, encoding="utf-8-sig")
     for s in out["summary"] + abl:

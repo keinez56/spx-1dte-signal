@@ -1,11 +1,11 @@
 """最終規則 R1–R5（回測與每日訊號共用）。
 
-每個交易日約 15:45 ET 判斷，賣「下一個交易日到期」的 SPX put 1 口，持有到結算。
+每個交易日收盤後判斷（回測用 ORATS 15:45 快照），賣「下一個交易日到期」的 SPX put 1 口，持有到結算。
 R1 事件日不做：到期日（隔天）有 CPI / NFP / FOMC
 R2 太平靜不做：10 日已實現波動 < 9%
 R3 反彈陷阱不做：今天漲 > 1.5% 且價格在 20 日均線之下
 R4 分層：價格比 20 日均線高 >= 1% → 賣高檔 delta（30Δ），否則低檔（4Δ）
-R5 收低檔降級：ES 當日 K 棒收在振幅最低 30% → 高檔降為低檔
+R5 收低檔降級：SPX 現貨當日 K 棒收在振幅最低 30% → 高檔降為低檔
 """
 import numpy as np
 import pandas as pd
@@ -41,6 +41,6 @@ def decide(row, expiry, es_clpos, p=PARAMS):
     if row["bias"] >= p["bias_hi"]:
         if es_clpos is not None and np.isfinite(es_clpos) and es_clpos < p["es_low_pos"]:
             return p["lo_delta"], "R5", (f"乖離 {row['bias']:+.2%} ≥ 1% 本應賣 {p['hi_delta']*100:.0f}Δ，"
-                                         f"但 ES 收在當日振幅 {es_clpos:.0%} 處（低檔），降為 {p['lo_delta']*100:.0f}Δ")
+                                         f"但 SPX 收在當日振幅 {es_clpos:.0%} 處（低檔），降為 {p['lo_delta']*100:.0f}Δ")
         return p["hi_delta"], "R4H", f"乖離 {row['bias']:+.2%} ≥ 1%，賣 {p['hi_delta']*100:.0f}Δ"
     return p["lo_delta"], "R4L", f"乖離 {row['bias']:+.2%} < 1%，只賣 {p['lo_delta']*100:.0f}Δ"

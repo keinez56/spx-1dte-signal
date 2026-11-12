@@ -76,7 +76,7 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
 <div class="wrap">
   <header class="top">
     <div>
-      <div class="eyebrow">SPX 隔日到期賣 put · 每日收盤前更新</div>
+      <div class="eyebrow">SPX 隔日到期賣 put · 每日收盤後更新</div>
       <h1>SPX 1DTE 賣 Put 訊號台</h1>
     </div>
     <div class="muted" id="gen" style="font-size:.82rem"></div>
@@ -130,7 +130,7 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
   <section>
     <h2>執行規則</h2>
     <div class="panel" style="display:flex;flex-direction:column;gap:14px">
-      <p style="margin:0">每個交易日美東 15:45（台灣 04:45，夏令時間 03:45）判斷一次，賣「下一個交易日到期」的 SPX put 1 口，賣在 bid，持有到結算。依序檢查，碰到第一條不做就停：</p>
+      <p style="margin:0">每個交易日用 SPX 官方收盤價和 ES 當日 K 棒判斷一次（網頁約在美東 17:15、台灣早上 6:15 前更新，夏令時間 5:15），賣「下一個交易日到期」的 SPX put 1 口，賣在 bid，持有到結算。依序檢查，碰到第一條不做就停：</p>
       <ol class="rules">
         <li><b>R1 事件日不做</b>：到期日當天有 CPI、非農（NFP）或 FOMC 利率決議。</li>
         <li><b>R2 太平靜不做</b>：10 日已實現波動低於 9%（最近 10 個日對數報酬的標準差 × √252，今天用當下價格）。</li>
@@ -169,7 +169,7 @@ function renderToday(){
   $('#gen').textContent = '更新於 '+s.generated;
   const cls = s.delta==null?'skip':(s.delta>=0.2?'sell':'small');
   t.classList.add(cls);
-  $('#t-day').textContent = `${s.signal_day}（週${wk(s.signal_day)}）收盤前判斷 → ${s.expiry}（週${wk(s.expiry)}）到期`;
+  $('#t-day').textContent = `${s.signal_day}（週${wk(s.signal_day)}）收盤 → ${s.expiry}（週${wk(s.expiry)}）到期`;
   $('#t-big').textContent = s.delta==null?'今天不賣':`賣 ${dlab(s.delta)} put`;
   $('#t-why').textContent = s.why;
   const kv=[['SPX',f2(s.spx)],['VIX',f2(s.vix)]];

@@ -39,10 +39,10 @@ def es_session_pos(now_et):
     if m.empty:
         return np.nan, None
     m.index = m.index.tz_convert(ET)
+    # 判斷日 D 的 ES 日 K = D-1 18:00 ET 到 D 17:00 ET（週一自然從週日 18:00 起）
     start = datetime.combine((now_et - pd.Timedelta(days=1)).date(), time(18, 0), ET)
-    if now_et.weekday() == 0:  # 週一：從週日 18:00 起
-        start = datetime.combine((now_et - pd.Timedelta(days=1)).date(), time(18, 0), ET)
-    s = m[m.index >= start]
+    end = datetime.combine(now_et.date(), time(17, 0), ET)
+    s = m[(m.index >= start) & (m.index < end)]
     if s.empty:
         return np.nan, None
     hi, lo, last = s["High"].max(), s["Low"].min(), s["Close"].iloc[-1]

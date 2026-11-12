@@ -1,6 +1,6 @@
 # SPX 1DTE 賣 put 每日訊號
 
-網頁：https://keinez56.github.io/spx-1dte-signal/ （GitHub Actions 每個交易日收盤前自動更新；Actions 頁可按 Run workflow，force 填 yes 立即重算）
+網頁：https://keinez56.github.io/spx-1dte-signal/ （GitHub Actions 每個交易日收盤後（約美東 17:15）自動更新；Actions 頁可按 Run workflow，force 填 yes 立即重算）
 
 ORATS 資料路徑依序找：`--data-dir` 參數 → 環境變數 `ORATS_DATA_DIR` → `config.json` 的 `orats_data_dir` → 公司 `D:\Claude\orats_option_historical_data` / 家裡 `C:\Users\User\Desktop\orats-option history data`。
 

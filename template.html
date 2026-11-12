@@ -1,0 +1,225 @@
+<title>SPX 1DTE 賣 Put 訊號台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: 單欄控制台 — 最上面是今天的決策卡，下面依序是近期訊號、回測、規則 */
+:root{
+  --bg:#f3f5f8; --panel:#ffffff; --ink:#152033; --muted:#5b6678; --line:#d9dee7;
+  --accent:#1f5fbf; --sell:#127a52; --sell-bg:#e3f4ec; --small:#9a6a00; --small-bg:#fbf1d9;
+  --skip:#a2372f; --skip-bg:#f8e5e3; --grid:#e8ecf2;
+  --c1:#1f5fbf; --c2:#127a52; --c3:#b0731a; --c4:#8a93a3;
+  --f-display:"IBM Plex Sans","Noto Sans TC",system-ui,sans-serif;
+  --f-body:"Noto Sans TC","IBM Plex Sans",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141c; --panel:#171e29; --ink:#e6ebf3; --muted:#97a2b4; --line:#2a3443;
+  --accent:#6ea3ff; --sell:#4cc795; --sell-bg:#15332a; --small:#e7b54d; --small-bg:#3a2e12;
+  --skip:#f08a80; --skip-bg:#3d1f1d; --grid:#222b38;
+  --c1:#6ea3ff; --c2:#4cc795; --c3:#e7b54d; --c4:#7d8799; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141c; --panel:#171e29; --ink:#e6ebf3; --muted:#97a2b4; --line:#2a3443;
+  --accent:#6ea3ff; --sell:#4cc795; --sell-bg:#15332a; --small:#e7b54d; --small-bg:#3a2e12;
+  --skip:#f08a80; --skip-bg:#3d1f1d; --grid:#222b38;
+  --c1:#6ea3ff; --c2:#4cc795; --c3:#e7b54d; --c4:#7d8799; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.25}
+h1{font-size:1.5rem;font-weight:600}
+h2{font-size:1.15rem;font-weight:600}
+.eyebrow{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-family:var(--f-display);font-weight:500}
+.mono,td.n,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+section{display:flex;flex-direction:column;gap:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;min-width:0}
+header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+/* 今日卡 */
+.today{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:0;padding:0;overflow:hidden}
+.today .verdict{padding:22px 24px;display:flex;flex-direction:column;gap:10px;border-right:1px solid var(--line)}
+.today.sell .verdict{background:var(--sell-bg)} .today.small .verdict{background:var(--small-bg)} .today.skip .verdict{background:var(--skip-bg)}
+.big{font-family:var(--f-display);font-size:2.4rem;font-weight:700;line-height:1.1}
+.today.sell .big{color:var(--sell)} .today.small .big{color:var(--small)} .today.skip .big{color:var(--skip)}
+.why{font-size:1rem;max-width:46ch}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px 18px;margin-top:6px}
+.kv div{display:flex;flex-direction:column}
+.kv b{font-family:var(--f-mono);font-weight:500;font-size:1.05rem}
+.kv span{font-size:.78rem;color:var(--muted)}
+.checks{padding:18px 20px;display:flex;flex-direction:column;gap:8px}
+.chk{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line)}
+.chk:last-child{border-bottom:0}
+.pill{display:inline-block;font-size:.72rem;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap;font-family:var(--f-display)}
+.pill.on{background:var(--skip-bg);color:var(--skip)} .pill.off{background:var(--grid);color:var(--muted)}
+.pill.hi{background:var(--sell-bg);color:var(--sell)} .pill.lo{background:var(--small-bg);color:var(--small)}
+.chk .t{font-weight:500} .chk .v{font-family:var(--f-mono);font-size:.85rem} .chk .note{grid-column:2;font-size:.78rem;color:var(--muted)}
+.warn{font-size:.85rem;color:var(--small);}
+/* tables */
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:.78rem;border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap;font-family:var(--f-display)}
+td{padding:6px 8px;border-bottom:1px solid var(--grid);vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.hl td{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.neg{color:var(--skip)} .pos{color:var(--sell)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.chartbox{position:relative;height:300px}
+.chartbox.sm{height:180px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.82rem}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+ol.rules{margin:0;padding-left:1.4em;display:flex;flex-direction:column;gap:6px;max-width:72ch}
+ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;max-width:75ch;color:var(--muted);font-size:.9rem}
+.events{display:flex;flex-wrap:wrap;gap:8px}
+.ev{border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:.82rem;background:var(--panel)}
+.ev b{font-family:var(--f-mono);font-weight:500;margin-right:6px}
+@media (max-width:720px){.today{grid-template-columns:1fr}.today .verdict{border-right:0;border-bottom:1px solid var(--line)}.big{font-size:2rem}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">SPX 隔日到期賣 put · 每日收盤前更新</div>
+      <h1>SPX 1DTE 賣 Put 訊號台</h1>
+    </div>
+    <div class="muted" id="gen" style="font-size:.82rem"></div>
+  </header>
+
+  <section>
+    <div class="panel today" id="today">
+      <div class="verdict">
+        <div class="eyebrow" id="t-day"></div>
+        <div class="big" id="t-big"></div>
+        <div class="why" id="t-why"></div>
+        <div class="kv" id="t-kv"></div>
+        <div class="warn" id="t-warn"></div>
+      </div>
+      <div class="checks" id="t-checks"><div class="eyebrow">規則檢查</div></div>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:6px">接下來 45 天的事件日（到期日落在這些天就不做）</div>
+      <div class="events" id="events"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>近 60 個交易日的訊號</h2>
+    <p class="muted" style="margin:0;font-size:.88rem">用每天官方收盤價重算，最右欄是隔天 SPX 實際漲跌，可以拿來對照當天的決定。</p>
+    <div class="panel tbl"><table id="hist"><thead><tr><th>判斷日</th><th>到期日</th><th>決定</th><th>原因</th><th class="n">收盤</th><th class="n">隔天漲跌</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>回測結果（2016 年起，ORATS 資料到 <span id="dend"></span>）</h2>
+    <div class="panel tbl"><table id="summary"><thead><tr><th>方案</th><th class="n">筆數</th><th class="n">勝率</th><th class="n">平均/筆</th><th class="n">總點</th><th class="n">每年點</th><th class="n">最大回撤</th><th class="n">最差單筆</th><th class="n">Sharpe</th><th class="n">前/後段</th><th class="n">10 萬起年化</th><th class="n">帳戶回撤</th></tr></thead><tbody></tbody></table></div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><h3 style="font-size:1rem">累積損益（SPX 點，1 口）</h3><div class="legend" id="lg"></div></div>
+      <div class="chartbox"><canvas id="cEq" aria-label="累積損益圖"></canvas></div>
+      <h3 style="font-size:.95rem;margin-top:14px">最終方案回撤</h3>
+      <div class="chartbox sm"><canvas id="cDd" aria-label="回撤圖"></canvas></div>
+    </div>
+    <div class="grid2">
+      <div class="panel tbl"><h3 style="font-size:1rem;margin-bottom:8px">各年度（點）</h3><table id="yearly"></table></div>
+      <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+        <div class="tbl"><h3 style="font-size:1rem;margin-bottom:8px">每條規則的貢獻（一次拿掉一條）</h3><table id="abl"><thead><tr><th>版本</th><th class="n">筆數</th><th class="n">總點</th><th class="n">回撤</th><th class="n">Sharpe</th></tr></thead><tbody></tbody></table></div>
+        <div class="tbl"><h3 style="font-size:1rem;margin-bottom:8px">依決定分類</h3><table id="bycode"><thead><tr><th>決定</th><th class="n">筆數</th><th class="n">平均</th><th class="n">合計</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="panel tbl"><h3 style="font-size:1rem;margin-bottom:8px">最差 10 筆（最終方案）</h3><table id="worst"><thead><tr><th>進場</th><th class="n">Δ</th><th class="n">履約價</th><th class="n">收</th><th class="n">結算</th><th class="n">損益</th></tr></thead><tbody></tbody></table></div>
+      <div class="panel"><h3 style="font-size:1rem;margin-bottom:8px">10 萬美元帳戶（保證金 SPX×20／口，整數口數，獲利滾入）</h3><div class="chartbox"><canvas id="cAc" aria-label="資金曲線"></canvas></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>執行規則</h2>
+    <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+      <p style="margin:0">每個交易日美東 15:45（台灣 04:45，夏令時間 03:45）判斷一次，賣「下一個交易日到期」的 SPX put 1 口，賣在 bid，持有到結算。依序檢查，碰到第一條不做就停：</p>
+      <ol class="rules">
+        <li><b>R1 事件日不做</b>：到期日當天有 CPI、非農（NFP）或 FOMC 利率決議。</li>
+        <li><b>R2 太平靜不做</b>：10 日已實現波動低於 9%（最近 10 個日對數報酬的標準差 × √252，今天用當下價格）。</li>
+        <li><b>R3 反彈陷阱不做</b>：今天漲超過 1.5%，但價格仍在 20 日均線之下。</li>
+        <li><b>R4 分層</b>：價格比 20 日均線高 1% 以上賣 30Δ，否則賣 4Δ。</li>
+        <li><b>R5 ES 收低檔降級</b>：ES 期貨當日 K 棒（前一天 18:00 ET 起）收在振幅最低 30%，R4 的 30Δ 降為 4Δ。</li>
+      </ol>
+      <p style="margin:0" class="muted">部位：每 SPX×20 美元保證金 1 口，不因 IV 調口數，不停損。被履約時當天平掉，不抱期貨等回本（回測抱 5 天的回撤從 75 點變 500 點以上）。手續費每口 2.82 美元已扣。</p>
+    </div>
+    <ul class="notes">
+      <li>結算價用 SPX 官方收盤（Yahoo ^GSPC）。月選到期日同時有 AM、PM 兩條鏈時取 PM（SPXW）那條。</li>
+      <li>參數是看過 2019 後資料挑的。逐年滾動驗證的結果比較接近保守版 20Δ/4Δ，實際預期建議看那一列。</li>
+      <li>最差單筆不是上限：像 2026-11-05 跌 4.4% 那種日子，4Δ 也會賠 170 點以上；那天是靠 R3 躲掉的。</li>
+      <li>建議履約價是估算（回測裡的「價外% ÷ VIX」中位數乘上當下 VIX），下單時以券商顯示的 delta 為準。</li>
+      <li>你實際做的是 ES put、台灣早上進場。平日差別很小，但週五收盤前進場的那一筆權利金最厚，晚到週日才進會少賺約兩成。</li>
+    </ul>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const BT = /*__BACKTEST__*/null;
+const SG = /*__SIGNAL__*/null;
+const $ = s => document.querySelector(s);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const f1 = x => (x==null||isNaN(x))?'–':(+x).toFixed(1);
+const f2 = x => (x==null||isNaN(x))?'–':(+x).toFixed(2);
+const pct = (x,d=1) => (x==null||isNaN(x))?'–':(x*100).toFixed(d)+'%';
+const sgn = (x,d=2) => (x==null)?'–':((x>0?'+':'')+(x*100).toFixed(d)+'%');
+const dlab = d => d==null?'不做':(Math.round(d*100)+'Δ');
+const esc = s => String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const wk = d => '日一二三四五六'[new Date(d+'T12:00:00').getDay()];
+
+function renderToday(){
+  const s=SG; const t=$('#today');
+  $('#gen').textContent = '更新於 '+s.generated;
+  const cls = s.delta==null?'skip':(s.delta>=0.2?'sell':'small');
+  t.classList.add(cls);
+  $('#t-day').textContent = `${s.signal_day}（週${wk(s.signal_day)}）收盤前判斷 → ${s.expiry}（週${wk(s.expiry)}）到期`;
+  $('#t-big').textContent = s.delta==null?'今天不賣':`賣 ${dlab(s.delta)} put`;
+  $('#t-why').textContent = s.why;
+  const kv=[['SPX',f2(s.spx)],['VIX',f2(s.vix)]];
+  if(s.est){kv.push(['估計履約價',s.est.strike.toFixed(0)]);kv.push(['約價外',pct(s.est.otm,2)]);}
+  $('#t-kv').innerHTML = kv.map(([a,b])=>`<div><b>${b}</b><span>${a}</span></div>`).join('');
+  const w=[];
+  if(!s.is_trading_day) w.push('今天美股休市，這是最近一個交易日收盤的判斷。');
+  if(s.early_close) w.push('今天提早收盤（13:00 ET），請在 12:45 ET 前判斷。');
+  if(s.spx_time) w.push('價格時間：'+s.spx_time);
+  $('#t-warn').textContent=w.join(' ');
+  $('#t-checks').insertAdjacentHTML('beforeend', s.checks.map((c,i)=>{
+    let p;
+    if(i===3) p = c.hit?'<span class="pill hi">30Δ</span>':'<span class="pill lo">4Δ</span>';
+    else p = c.hit?'<span class="pill on">觸發</span>':'<span class="pill off">未觸發</span>';
+    return `<div class="chk">${p}<div><span class="t">${esc(c.rule)}</span> <span class="v">${esc(c.value)}</span></div><div class="note">${esc(c.note)}</div></div>`;}).join(''));
+  $('#events').innerHTML = s.upcoming_events.map(e=>`<span class="ev"><b>${e.date.slice(5)}</b>週${wk(e.date)} ${e.event}</span>`).join('') || '<span class="muted">無</span>';
+  $('#hist tbody').innerHTML = s.history.map(h=>{
+    const pill = h.delta==null?'<span class="pill on">不做</span>':(h.delta>=0.2?'<span class="pill hi">'+dlab(h.delta)+'</span>':'<span class="pill lo">'+dlab(h.delta)+'</span>');
+    const nr = h.next_ret==null?'<span class="muted">待結算</span>':`<span class="${h.next_ret<0?'neg':'pos'}">${sgn(h.next_ret)}</span>`;
+    return `<tr${h.date===s.signal_day?' class="hl"':''}><td class="mono">${h.date.slice(5)} 週${wk(h.date)}</td><td class="mono">${h.expiry.slice(5)}</td><td>${pill}</td><td style="min-width:16em">${esc(h.why)}</td><td class="n">${f2(h.close)}</td><td class="n">${nr}</td></tr>`;}).join('');
+}
+
+function renderBT(){
+  const b=BT; $('#dend').textContent=b.data_end;
+  const order=['final','cons20','fixed5','fixed30'];
+  const cols=['--c1','--c2','--c3','--c4'];
+  $('#summary tbody').innerHTML=b.summary.map((s,i)=>`<tr${i===0?' class="hl"':''}><td>${esc(s.name)}</td><td class="n">${s.n}</td><td class="n">${pct(s.win)}</td><td class="n">${f2(s.avg)}</td><td class="n">${s.total.toFixed(0)}</td><td class="n">${s.per_year.toFixed(0)}</td><td class="n neg">${s.maxdd.toFixed(0)}</td><td class="n neg">${s.worst.toFixed(0)}</td><td class="n">${f2(s.sharpe)}</td><td class="n">${f1(s.sharpe_h1)}/${f1(s.sharpe_h2)}</td><td class="n">${pct(s.cagr_100k)}</td><td class="n neg">${pct(s.acct_dd)}</td></tr>`).join('');
+  $('#lg').innerHTML=b.summary.map((s,i)=>`<span><i style="background:${css(cols[i])}"></i>${esc(s.name)}</span>`).join('');
+  const years=Object.keys(b.yearly.final);
+  $('#yearly').innerHTML='<thead><tr><th>年</th>'+b.summary.map(s=>`<th class="n">${esc(s.name.split('（')[0])}</th>`).join('')+'</tr></thead><tbody>'+
+    years.map(y=>'<tr><td class="mono">'+y+'</td>'+order.map(k=>{const v=b.yearly[k][y];return v?`<td class="n ${v[1]<0?'neg':''}">${v[1].toFixed(0)} <span class="muted">(${v[0]})</span></td>`:'<td class="n">–</td>'}).join('')+'</tr>').join('')+'</tbody>';
+  $('#abl tbody').innerHTML=b.ablation.map((s,i)=>`<tr${i===0?' class="hl"':''}><td>${esc(s.name)}</td><td class="n">${s.n}</td><td class="n">${s.total.toFixed(0)}</td><td class="n neg">${s.maxdd.toFixed(0)}</td><td class="n">${f2(s.sharpe)}</td></tr>`).join('');
+  const cn={R4H:'乖離 ≥1% 賣 30Δ',R4L:'乖離 <1% 賣 4Δ',R5:'ES 收低檔降為 4Δ'};
+  $('#bycode tbody').innerHTML=b.by_code.map(r=>`<tr><td>${cn[r.code]||r.code}</td><td class="n">${r.count}</td><td class="n">${f2(r.mean)}</td><td class="n">${r.sum.toFixed(0)}</td></tr>`).join('');
+  $('#worst tbody').innerHTML=b.worst.map(w=>`<tr><td class="mono">${w.date}</td><td class="n">${dlab(w.delta)}</td><td class="n">${w.strike.toFixed(0)}</td><td class="n">${f2(w.bid)}</td><td class="n">${f2(w.settle)}</td><td class="n neg">${f1(w.pnl)}</td></tr>`).join('');
+  if(!window.Chart) return;
+  Chart.defaults.font.family=css('--f-mono'); Chart.defaults.color=css('--muted'); Chart.defaults.borderColor=css('--grid');
+  const base={animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0].raw.x}}},
+    scales:{x:{type:'category',ticks:{maxTicksLimit:9,callback:function(v){return this.getLabelForValue(v).slice(0,4)}},grid:{display:false}},y:{grid:{color:css('--grid')}}}};
+  // 用最終方案的日期當 x 軸，其他方案按日期對齊（取當日以前最後一個值）
+  const all=[...new Set(order.flatMap(k=>b.curves[k].d))].sort();
+  const ds=order.map((k,i)=>{const c=b.curves[k];let j=-1,last=null;const data=all.map(d=>{while(j+1<c.d.length&&c.d[j+1]<=d){j++;last=c.eq[j]}return {x:d,y:last}});
+    return {data,borderColor:css(cols[i]),borderWidth:i===0?2.2:1.4,pointRadius:0,tension:0,spanGaps:true}});
+  new Chart($('#cEq'),{type:'line',data:{labels:all,datasets:ds},options:base});
+  const fd=b.curves.final.d;
+  new Chart($('#cDd'),{type:'line',data:{labels:fd,datasets:[{data:fd.map((d,i)=>({x:d,y:b.final_dd[i]})),borderColor:css('--skip'),backgroundColor:'color-mix(in srgb,'+css('--skip')+' 18%,transparent)',fill:true,borderWidth:1.2,pointRadius:0}]},options:base});
+  const ac=b.acct_curve;
+  new Chart($('#cAc'),{type:'line',data:{labels:ac.d,datasets:[{data:ac.d.map((d,i)=>({x:d,y:ac.cap[i]})),borderColor:css('--c1'),borderWidth:1.8,pointRadius:0}]},
+    options:{...base,scales:{...base.scales,y:{type:'logarithmic',grid:{color:css('--grid')},ticks:{callback:v=>[1e5,2e5,5e5,1e6].includes(v)?(v/1e4)+' 萬':''}}},plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0].raw.x,label:it=>' 資金 '+Math.round(it.raw.y).toLocaleString()+'，'+ac.n[it.dataIndex]+' 口'}}}}});
+}
+try{renderToday()}catch(e){console.error(e)}
+try{renderBT()}catch(e){console.error(e)}
+</script>

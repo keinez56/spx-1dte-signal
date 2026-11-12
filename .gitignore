@@ -1,0 +1,6 @@
+cache/
+site/
+__pycache__/
+output/*
+!output/backtest.json
+排程設定.md

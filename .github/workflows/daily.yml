@@ -1,0 +1,49 @@
+name: daily-signal
+
+on:
+  schedule:
+    # 美東 15:45 收盤前判斷。GitHub cron 用 UTC，且常延遲 5–20 分鐘。
+    # 19:30 UTC = 夏令 15:30 ET；20:30 UTC = 冬令 15:30 ET；17:30 UTC 涵蓋提早收盤日（13:00 ET 收盤）。
+    # run_daily.py 會自己判斷是否在收盤前時段，不在就跳過。
+    - cron: "30 17,19,20 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "不管時段強制重算（填 yes）"
+        default: "no"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - id: sig
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "yes" ]; then python run_daily.py --force | tee run.log; else python run_daily.py | tee run.log; fi
+          echo "result=$(tail -1 run.log | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - if: steps.sig.outputs.result == 'RESULT=UPDATED'
+        uses: actions/configure-pages@v5
+      - if: steps.sig.outputs.result == 'RESULT=UPDATED'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - if: steps.sig.outputs.result == 'RESULT=UPDATED'
+        id: deploy
+        uses: actions/deploy-pages@v4

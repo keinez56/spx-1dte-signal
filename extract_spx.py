@@ -1,4 +1,4 @@
-"""從 ORATS 每日 zip/csv 抽出 SPX：每日現價 + 7 天內到期的 put 鏈。
+"""從 ORATS 每日 zip/csv 抽出 SPX：每日現價 + 7 天內到期的 put/call 鏈。
 
 按欄名讀（2024-11-27 起多 cOpra/pOpra 欄）。put delta = delta - 1。
 用法: python extract_spx.py [--data-dir PATH] [--start 2015-10-01] [--workers 12]
@@ -15,7 +15,7 @@ import pandas as pd
 from common import CACHE, data_dir
 
 COLS = ["stkPx", "expirDate", "strike", "pBidPx", "pAskPx", "pValue", "pMidIv",
-        "delta", "trade_date", "pOi", "pVolu"]
+        "cBidPx", "cAskPx", "cValue", "delta", "trade_date", "pOi", "pVolu"]
 
 
 def read_spx_block(path: Path):
@@ -53,7 +53,7 @@ def process(path_str):
     near["pdelta"] = near["delta"] - 1.0
     near["date"] = d
     near = near[["date", "expir", "dte", "strike", "stkPx", "pBidPx", "pAskPx", "pValue",
-                 "pMidIv", "pdelta", "pOi", "pVolu"]]
+                 "pMidIv", "pdelta", "pOi", "pVolu", "cBidPx", "cAskPx", "cValue", "delta"]]
     return d, spot, near, None
 
 
@@ -88,7 +88,7 @@ def main():
             if n % 200 == 0:
                 print(n, d.date(), spot, flush=True)
     pd.DataFrame(spots, columns=["date", "spot"]).to_parquet(CACHE / "spx_spot.parquet")
-    pd.concat(chains).to_parquet(CACHE / "spx_near_puts.parquet")
+    pd.concat(chains).to_parquet(CACHE / "spx_near_chain.parquet")
     print("errors:", len(errs), errs[:10])
 
 

@@ -2,10 +2,10 @@ name: daily-signal
 
 on:
   schedule:
-    # 收盤後跑：美東 17:15 左右（ES 日 K 17:00 收完），GitHub cron 用 UTC。
-    # 21:15 UTC = 夏令 17:15 ET；22:15 UTC = 冬令 17:15 ET（夏令時是 18:15，也在時段內）。
-    # run_daily.py 只在 17:05–20:00 ET 執行，其他時段跳過。
-    - cron: "15 21,22 * * 1-5"
+    # 現貨收盤後跑：美東 16:15（台灣冬令 05:15、夏令 04:15）。GitHub cron 用 UTC。
+    # 20:15 UTC = 夏令 16:15 ET；21:15 UTC = 冬令 16:15 ET（夏令時是 17:15，也在時段內）。
+    # run_daily.py 只在 16:05–20:00 ET 執行，其他時段跳過。
+    - cron: "15 20,21 * * 1-5"
   push:
     branches: [main]
   workflow_dispatch:

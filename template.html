@@ -130,7 +130,7 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
   <section>
     <h2>執行規則</h2>
     <div class="panel" style="display:flex;flex-direction:column;gap:14px">
-      <p style="margin:0">每個交易日用 SPX 官方收盤價和 ES 當日 K 棒判斷一次（網頁約在美東 17:15、台灣早上 6:15 前更新，夏令時間 5:15），賣「下一個交易日到期」的 SPX put 1 口，賣在 bid，持有到結算。依序檢查，碰到第一條不做就停：</p>
+      <p style="margin:0">每個交易日用 SPX 官方收盤價和 ES 當日 K 棒判斷一次（網頁約在美東 16:15 更新，台灣冬令 05:15、夏令 04:15），賣「下一個交易日到期」的 SPX put 1 口，賣在 bid，持有到結算。依序檢查，碰到第一條不做就停：</p>
       <ol class="rules">
         <li><b>R1 事件日不做</b>：到期日當天有 CPI、非農（NFP）或 FOMC 利率決議。</li>
         <li><b>R2 太平靜不做</b>：10 日已實現波動低於 9%（最近 10 個日對數報酬的標準差 × √252，今天用當下價格）。</li>

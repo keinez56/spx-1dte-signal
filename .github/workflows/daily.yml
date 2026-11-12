@@ -6,6 +6,8 @@ on:
     # 19:30 UTC = 夏令 15:30 ET；20:30 UTC = 冬令 15:30 ET；17:30 UTC 涵蓋提早收盤日（13:00 ET 收盤）。
     # run_daily.py 會自己判斷是否在收盤前時段，不在就跳過。
     - cron: "30 17,19,20 * * 1-5"
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       force:
@@ -36,7 +38,7 @@ jobs:
       - run: pip install -r requirements.txt
       - id: sig
         run: |
-          if [ "${{ github.event.inputs.force }}" = "yes" ]; then python run_daily.py --force | tee run.log; else python run_daily.py | tee run.log; fi
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event.inputs.force }}" = "yes" ]; then python run_daily.py --force | tee run.log; else python run_daily.py | tee run.log; fi
           echo "result=$(tail -1 run.log | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - if: steps.sig.outputs.result == 'RESULT=UPDATED'
         uses: actions/configure-pages@v5

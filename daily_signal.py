@@ -33,6 +33,32 @@ def next_trading_day(d):
     return d
 
 
+def is_trading_day(d):
+    d = pd.Timestamp(d).normalize()
+    return d.weekday() < 5 and d not in HOLIDAYS
+
+
+def in_session(now_et):
+    """美股現貨盤中（09:30 到收盤後 5 分鐘）。"""
+    d = pd.Timestamp(now_et.date())
+    if not is_trading_day(d):
+        return False
+    end = time(13, 5) if d in EARLY_CLOSE else time(16, 5)
+    return time(9, 30) <= now_et.time() < end
+
+
+def last_closed_day(now_et):
+    """最近一個已經收盤的交易日。"""
+    d = pd.Timestamp(now_et.date())
+    end = time(13, 5) if d in EARLY_CLOSE else time(16, 5)
+    if is_trading_day(d) and now_et.time() >= end:
+        return d
+    d -= pd.Timedelta(days=1)
+    while not is_trading_day(d):
+        d -= pd.Timedelta(days=1)
+    return d
+
+
 def es_session_pos(now_et):
     """ES 當日盤（前一天 18:00 ET 起）收盤位置。"""
     m = yf.download("ES=F", period="5d", interval="5m", auto_adjust=False, progress=False, multi_level_index=False)
@@ -78,20 +104,24 @@ def main():
 
     is_trading = today.weekday() < 5 and today not in HOLIDAYS
     intraday = yf.download("^GSPC", period="1d", interval="1m", auto_adjust=False, progress=False, multi_level_index=False)
-    px_now = float(intraday["Close"].iloc[-1]) if not intraday.empty else float(daily["Close"].iloc[-1])
-    px_time = intraday.index[-1].tz_convert(ET).strftime("%Y-%m-%d %H:%M ET") if not intraday.empty else None
-    # 收盤後（16:05 ET 以後）或休市日：改用官方收盤價（含收盤競價），不用最後一分鐘的成交價
-    last_day = daily.index[-1]
-    if (now_et.time() >= time(16, 5) and last_day == today) or not is_trading:
-        px_now = float(daily["Close"].iloc[-1])
-        px_time = f"{last_day:%Y-%m-%d} 官方收盤"
-
     closes = daily["Close"].copy()
-    if is_trading:
-        closes.loc[today] = px_now  # 今天用當下價格
+    if in_session(now_et):
+        # 盤中（手動強制更新時）：今天用當下價格
+        px_now = float(intraday["Close"].iloc[-1]) if not intraday.empty else float(closes.iloc[-1])
+        px_time = intraday.index[-1].tz_convert(ET).strftime("%Y-%m-%d %H:%M ET") if not intraday.empty else None
+        closes.loc[today] = px_now
         sig_day = today
     else:
-        sig_day = closes.index[-1]
+        # 收盤後到隔天開盤前：判斷「最近一個已收盤交易日」，用官方收盤價
+        sig_day = last_closed_day(now_et)
+        if sig_day in closes.index:
+            px_now = float(closes.loc[sig_day])
+            px_time = f"{sig_day:%Y-%m-%d} 官方收盤"
+        else:  # Yahoo 日 K 還沒出來：先用最後一分鐘價，之後的排程會再用官方收盤價重算
+            px_now = float(intraday["Close"].iloc[-1]) if not intraday.empty else float(closes.iloc[-1])
+            px_time = f"{sig_day:%Y-%m-%d} 收盤前最後價（官方收盤價尚未發布）"
+            closes.loc[sig_day] = px_now
+        closes = closes[closes.index <= sig_day]
     closes = closes.sort_index()
     ind = indicators(closes)
     row = ind.loc[sig_day]

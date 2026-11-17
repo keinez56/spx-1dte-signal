@@ -2,10 +2,9 @@ name: daily-signal
 
 on:
   schedule:
-    # 現貨收盤後跑：目標美東 16:15（台灣冬令 05:15、夏令 04:15）。GitHub cron 用 UTC。
-    # GitHub 的排程常延遲或漏跑，所以 20:15–23:55 UTC 每 20 分鐘試一次；
-    # run_daily.py 只在 16:05–20:00 ET 執行，且當天已更新過就跳過，所以不會重複發布。
-    - cron: "15,35,55 20,21,22,23 * * 1-5"
+    # GitHub 的排程常延遲好幾小時或漏跑（實測 11/13–11/16 只觸發 2 次），所以每小時都試一次。
+    # run_daily.py 會判斷：盤中不跑；線上已是最近收盤日的官方收盤訊號就跳過；否則補上。
+    - cron: "7 * * * *"
   push:
     branches: [main]
   workflow_dispatch:

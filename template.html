@@ -117,7 +117,8 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
   <section>
     <h2>近 60 個交易日的訊號</h2>
     <p class="muted" style="margin:0;font-size:.88rem">用每天官方收盤價重算，最右欄是隔天 SPX 實際漲跌，可以拿來對照當天的決定。</p>
-    <div class="panel tbl"><table id="hist"><thead><tr><th>判斷日</th><th>到期日</th><th>決定</th><th>原因</th><th class="n">收盤</th><th class="n">隔天漲跌</th></tr></thead><tbody></tbody></table></div>
+    <div class="panel tbl"><table id="hist"><thead><tr><th>判斷日</th><th>到期日</th><th>決定</th><th>原因</th><th class="n">收盤</th><th class="n">估計履約價</th><th class="n">估計權利金</th><th class="n">隔天漲跌</th><th class="n">估計損益</th></tr></thead><tbody></tbody></table></div>
+    <p class="muted" style="margin:0;font-size:.82rem">履約價和權利金是用當天收盤價和 VIX 估算的（依 2023 年起回測的中位數比例），不是實際報價。估計損益 = 估計權利金 − 跌破履約價的點數 − 手續費，單位是 SPX 點，1 口 = 點數 × 100 美元。</p>
   </section>
 
   <section>
@@ -188,7 +189,7 @@ function renderToday(){
   $('#t-big').textContent = s.delta==null?'今天不賣':`賣 ${dlab(s.delta)} put`;
   $('#t-why').textContent = s.why;
   const kv=[['SPX',f2(s.spx)],['VIX',f2(s.vix)]];
-  if(s.est){kv.push(['估計履約價',s.est.strike.toFixed(0)]);kv.push(['約價外',pct(s.est.otm,2)]);}
+  if(s.est){kv.push(['估計履約價',s.est.strike.toFixed(0)]);kv.push(['約價外',pct(s.est.otm,2)]);if(s.est.prem!=null)kv.push(['估計權利金',f2(s.est.prem)]);}
   $('#t-kv').innerHTML = kv.map(([a,b])=>`<div><b>${b}</b><span>${a}</span></div>`).join('');
   const w=[];
   if(!s.is_trading_day) w.push('今天美股休市，這是最近一個交易日收盤的判斷。');
@@ -204,7 +205,8 @@ function renderToday(){
   $('#hist tbody').innerHTML = s.history.map(h=>{
     const pill = h.delta==null?'<span class="pill on">不做</span>':(h.delta>=0.2?'<span class="pill hi">'+dlab(h.delta)+'</span>':'<span class="pill lo">'+dlab(h.delta)+'</span>');
     const nr = h.next_ret==null?'<span class="muted">待結算</span>':`<span class="${h.next_ret<0?'neg':'pos'}">${sgn(h.next_ret)}</span>`;
-    return `<tr${h.date===s.signal_day?' class="hl"':''}><td class="mono">${h.date.slice(5)} 週${wk(h.date)}</td><td class="mono">${h.expiry.slice(5)}</td><td>${pill}</td><td style="min-width:16em">${esc(h.why)}</td><td class="n">${f2(h.close)}</td><td class="n">${nr}</td></tr>`;}).join('');
+    const pl = h.delta==null?'–':(h.pnl==null?'<span class="muted">待結算</span>':`<span class="${h.pnl<0?'neg':'pos'}">${(h.pnl>0?'+':'')+f2(h.pnl)}</span>`);
+    return `<tr${h.date===s.signal_day?' class="hl"':''}><td class="mono">${h.date.slice(5)} 週${wk(h.date)}</td><td class="mono">${h.expiry.slice(5)}</td><td>${pill}</td><td style="min-width:16em">${esc(h.why)}</td><td class="n">${f2(h.close)}</td><td class="n">${h.strike==null?'–':h.strike.toFixed(0)}</td><td class="n">${h.prem==null?'–':f2(h.prem)}</td><td class="n">${nr}</td><td class="n">${pl}</td></tr>`;}).join('');
 }
 
 function renderBT(){

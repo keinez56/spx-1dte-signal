@@ -23,7 +23,16 @@ HOLIDAYS = {pd.Timestamp(x) for x in """
 2027-01-01 2027-01-18 2027-02-15 2027-03-26 2027-05-31 2027-06-18 2027-07-05 2027-09-06 2027-11-25 2027-12-24
 """.split()}
 EARLY_CLOSE = {pd.Timestamp(x) for x in "2026-11-27 2026-12-24 2027-11-26".split()}
-OTM_PER_VIX = {0.04: 0.1193, 0.30: 0.0190, 0.20: 0.040}  # 回測中位數：價外% / VIX
+# 2023 年起（每天都有到期）回測中位數：價外% / VIX、權利金(bid)佔現價% / VIX
+OTM_PER_VIX = {0.04: 0.130, 0.30: 0.0454, 0.20: 0.065}
+PREM_PER_VIX = {0.04: 0.000874, 0.30: 0.00864, 0.20: 0.0048}
+
+
+def estimate(px, vix, delta):
+    """估計履約價（往下取 5 的倍數）與權利金。只是估算，實際以券商報價為準。"""
+    strike = float(np.floor(px * (1 - OTM_PER_VIX[delta] * vix / 100) / 5) * 5)
+    prem = round(px * PREM_PER_VIX[delta] * vix / 100, 2)
+    return strike, prem
 
 
 def next_trading_day(d):
@@ -76,7 +85,7 @@ def es_session_pos(now_et):
     return float(pos), dict(high=float(hi), low=float(lo), last=float(last))
 
 
-def history_signals(daily, es_daily, n=60):
+def history_signals(daily, es_daily, vix, n=60):
     """用日 K 收盤重算近 n 天每天的訊號（含隔天結果），給網頁的歷史表。"""
     ind = indicators(daily["Close"])
     es_pos = (es_daily["Close"] - es_daily["Low"]) / (es_daily["High"] - es_daily["Low"])
@@ -87,8 +96,16 @@ def history_signals(daily, es_daily, n=60):
         e = idx[k + 1] if k + 1 < len(idx) else next_trading_day(d)
         delta, code, why = decide(ind.loc[d], e, es_pos.get(d, np.nan))
         nxt = float(daily["Close"].iloc[k + 1] / daily["Close"].iloc[k] - 1) if k + 1 < len(idx) else None
+        px = float(ind.loc[d, "px"])
+        strike = prem = pnl = None
+        v = vix.get(d, np.nan)
+        if delta is not None and np.isfinite(v):
+            strike, prem = estimate(px, float(v), delta)
+            if k + 1 < len(idx):
+                settle = float(daily["Close"].iloc[k + 1])
+                pnl = round(prem - max(strike - settle, 0) - PARAMS["fee_pts"], 2)
         rows.append(dict(date=f"{d:%Y-%m-%d}", expiry=f"{e:%Y-%m-%d}", delta=delta, code=code, why=why,
-                         close=round(float(ind.loc[d, 'px']), 2), next_ret=nxt))
+                         close=round(px, 2), next_ret=nxt, strike=strike, prem=prem, pnl=pnl))
     return rows[::-1]
 
 
@@ -99,7 +116,8 @@ def main():
     daily.index = pd.to_datetime(daily.index).tz_localize(None).normalize()
     es_daily = yf.download("ES=F", period="9mo", auto_adjust=False, progress=False, multi_level_index=False)
     es_daily.index = pd.to_datetime(es_daily.index).tz_localize(None).normalize()
-    vix = yf.download("^VIX", period="5d", auto_adjust=False, progress=False, multi_level_index=False)["Close"]
+    vix = yf.download("^VIX", period="9mo", auto_adjust=False, progress=False, multi_level_index=False)["Close"]
+    vix.index = pd.to_datetime(vix.index).tz_localize(None).normalize()
     vix_now = float(vix.iloc[-1])
 
     is_trading = today.weekday() < 5 and today not in HOLIDAYS
@@ -141,9 +159,9 @@ def main():
 
     est = None
     if delta is not None:
-        otm = OTM_PER_VIX[delta] * vix_now / 100
-        k = px_now * (1 - otm)
-        est = dict(otm=otm, strike=float(np.floor(k / 5) * 5))
+        v_sig = float(vix.get(sig_day, vix_now))
+        k, prem = estimate(px_now, v_sig, delta)
+        est = dict(otm=1 - k / px_now, strike=k, prem=prem)
 
     checks = [
         dict(rule="R1 事件日", value=EVENTS.get(expiry, "無"), hit=bool(EVENTS.get(expiry)),
@@ -164,7 +182,7 @@ def main():
         expiry=f"{expiry:%Y-%m-%d}", is_trading_day=is_trading, early_close=bool(sig_day in EARLY_CLOSE),
         action="SELL" if delta else "SKIP", delta=delta, code=code, why=why,
         spx=px_now, spx_time=px_time, vix=vix_now, est=est, es=es_info, checks=checks,
-        history=history_signals(daily, daily),
+        history=history_signals(daily[daily.index <= sig_day], daily, vix),
         upcoming_events=[dict(date=f"{d:%Y-%m-%d}", event=v) for d, v in sorted(EVENTS.items())
                          if today <= d <= today + pd.Timedelta(days=45)],
     )

@@ -1,4 +1,7 @@
-"""2016 起回測最終方案與對照組，輸出 output/backtest.json 給儀表板。
+"""2016 起回測，輸出 output/backtest.json 給儀表板。
+
+四種設定（高檔 30Δ/20Δ × CPI 日做/不做）都會算，網頁依 strategy_config.json 的設定顯示對應那一組，
+所以切換設定後不必重跑回測。另有固定 5Δ、固定 30Δ 兩個對照組。
 
 結算價：SPX 官方收盤（Yahoo ^GSPC），找不到才用 ORATS 隔天快照。
 同一履約價有 AM/PM 兩條鏈（月選到期日）時取價值較高的那條（PM 結算的 SPXW）。
@@ -10,7 +13,7 @@ import pandas as pd
 
 from common import CACHE, OUT
 from market_data import load
-from strategy import PARAMS, decide, indicators
+from strategy import CONFIG, HI_CHOICES, PARAMS, decide, indicators, make_params, preset_key, preset_name
 
 START = pd.Timestamp("2016-01-01")
 
@@ -59,33 +62,14 @@ def account_sim(tr, spx_close, capital=100_000, margin_mult=20):
     return df, float(cagr), float(dd)
 
 
-def main():
-    yf = load()
-    spot = pd.read_parquet(CACHE / "spx_spot.parquet").set_index("date")["spot"].sort_index()
-    chain = load_chain()
-    close = yf["spx"]["Close"]
-    import os
-    es = yf[os.environ.get("R5_SRC", "spx")]  # R5 用哪個日 K：es（ES 期貨）或 spx（現貨）
-    es_pos = ((es["Close"] - es["Low"]) / (es["High"] - es["Low"])).replace([np.inf, -np.inf], np.nan)
-
-    ind = indicators(spot)
-    days = list(ind.index)
-    by_day = {d: g for d, g in chain.groupby("date")}
-    variants = {
-        "final": dict(PARAMS),
-        "cons20": dict(PARAMS, hi_delta=0.20),
-    }
-    trades = {k: [] for k in variants}
-    trades["fixed5"] = []
-    trades["fixed30"] = []
-    log = []
+def run(days, by_day, ind, es_pos, close, spot, p, log=None):
+    """跑一組參數，回傳逐筆交易 DataFrame。"""
+    rs = []
     for i, d in enumerate(days[:-1]):
-        if d < START:
+        if d < START or d not in by_day:
             continue
         e = days[i + 1]
-        g = by_day.get(d)
-        if g is None:
-            continue
+        g = by_day[d]
         g = g[g["expir"] == e]
         if g.empty:
             continue
@@ -93,93 +77,117 @@ def main():
         if not np.isfinite(settle):
             settle = spot.get(e)
         row = ind.loc[d]
-        clp = es_pos.get(d, np.nan)
-        for k, p in variants.items():
-            delta, code, why = decide(row, e, clp, p)
-            if k == "final":
-                log.append(dict(date=d, expir=e, code=code, delta=delta, why=why))
-            if delta is None:
-                continue
-            r = pick(g, delta)
-            if r is None:
-                continue
-            pnl = r["pBidPx"] - max(r["strike"] - settle, 0) - p["fee_pts"]
-            trades[k].append(dict(date=d, expir=e, delta=delta, code=code, strike=r["strike"], spot=row["px"],
-                                  bid=r["pBidPx"], settle=settle, otm=1 - r["strike"] / row["px"], pnl=pnl))
-        # 對照：固定 delta、只跳事件日
-        from events import EVENTS
-        if pd.Timestamp(e) not in EVENTS:
-            for k, dl in (("fixed5", 0.05), ("fixed30", 0.30)):
-                r = pick(g, dl)
-                if r is not None:
-                    pnl = r["pBidPx"] - max(r["strike"] - settle, 0) - PARAMS["fee_pts"]
-                    trades[k].append(dict(date=d, expir=e, delta=dl, code="F", strike=r["strike"], spot=row["px"],
-                                          bid=r["pBidPx"], settle=settle, otm=1 - r["strike"] / row["px"], pnl=pnl))
+        delta, code, why = decide(row, e, es_pos.get(d, np.nan), p)
+        if log is not None:
+            log.append(dict(date=d, expir=e, code=code, delta=delta, why=why))
+        if delta is None:
+            continue
+        r = pick(g, delta)
+        if r is None:
+            continue
+        pnl = r["pBidPx"] - max(r["strike"] - settle, 0) - p["fee_pts"]
+        rs.append(dict(date=d, expir=e, delta=delta, code=code, strike=r["strike"], spot=row["px"],
+                       bid=r["pBidPx"], settle=settle, otm=1 - r["strike"] / row["px"], pnl=pnl))
+    return pd.DataFrame(rs)
 
-    names = {"final": "最終方案 30Δ/4Δ（R1–R5）", "cons20": "保守版 20Δ/4Δ（R1–R5）",
-             "fixed5": "固定 5Δ（只跳事件日）", "fixed30": "固定 30Δ（只跳事件日）"}
-    out = {"generated": pd.Timestamp.now().isoformat(timespec="minutes"), "params": PARAMS,
-           "data_end": str(spot.index.max().date()), "summary": [], "curves": {}, "yearly": {}}
-    tdf = {k: pd.DataFrame(v) for k, v in trades.items()}
-    for k, t in tdf.items():
-        s = stats(t, names[k])
+
+def run_fixed(days, by_day, ind, close, spot, dl):
+    """對照組：固定 delta、只跳全部事件日。"""
+    from events import EVENTS
+    rs = []
+    for i, d in enumerate(days[:-1]):
+        if d < START or d not in by_day:
+            continue
+        e = days[i + 1]
+        g = by_day[d]
+        g = g[g["expir"] == e]
+        if g.empty or pd.Timestamp(e) in EVENTS:
+            continue
+        settle = close.get(e, np.nan)
+        if not np.isfinite(settle):
+            settle = spot.get(e)
+        r = pick(g, dl)
+        if r is None:
+            continue
+        rs.append(dict(date=d, expir=e, delta=dl, code="F", strike=r["strike"], spot=ind.loc[d, "px"], bid=r["pBidPx"],
+                       settle=settle, otm=1 - r["strike"] / ind.loc[d, "px"], pnl=r["pBidPx"] - max(r["strike"] - settle, 0) - PARAMS["fee_pts"]))
+    return pd.DataFrame(rs)
+
+
+def main():
+    import os
+    yf = load()
+    spot = pd.read_parquet(CACHE / "spx_spot.parquet").set_index("date")["spot"].sort_index()
+    chain = load_chain()
+    close = yf["spx"]["Close"]
+    es = yf[os.environ.get("R5_SRC", "spx")]  # R5 用哪個日 K：es（ES 期貨）或 spx（現貨）
+    es_pos = ((es["Close"] - es["Low"]) / (es["High"] - es["Low"])).replace([np.inf, -np.inf], np.nan)
+    ind = indicators(spot)
+    days = list(ind.index)
+    by_day = {d: g for d, g in chain.groupby("date")}
+    args = (days, by_day, ind, es_pos, close, spot)
+
+    active = preset_key(CONFIG["hi_delta"], CONFIG["trade_cpi"])
+    presets = [(hi, cpi) for hi in sorted(HI_CHOICES, reverse=True) for cpi in (False, True)]
+    out = {"generated": pd.Timestamp.now().isoformat(timespec="minutes"), "params": PARAMS, "config": CONFIG, "active": active,
+           "data_end": str(spot.index.max().date()), "order": [], "summary": [], "curves": {}, "yearly": {}, "detail": {}}
+
+    def add(key, name, t, sim=True):
+        s = stats(t, name)
+        s["key"] = key
         h1, h2 = t[t["date"] < "2021-07-01"], t[t["date"] >= "2021-07-01"]
-        s["sharpe_h1"] = stats(h1, "")["sharpe"]
-        s["sharpe_h2"] = stats(h2, "")["sharpe"]
-        sim, cagr, add = account_sim(t, close)
-        s["cagr_100k"], s["acct_dd"], s["final_cap"] = cagr, add, float(sim["cap"].iloc[-1])
+        s["sharpe_h1"], s["sharpe_h2"] = stats(h1, "")["sharpe"], stats(h2, "")["sharpe"]
+        acct, cagr, add_ = account_sim(t, close)
+        s["cagr_100k"], s["acct_dd"], s["final_cap"] = cagr, add_, float(acct["cap"].iloc[-1])
+        out["order"].append(key)
         out["summary"].append(s)
-        out["curves"][k] = {"d": t["date"].dt.strftime("%Y-%m-%d").tolist(),
-                            "eq": t["pnl"].cumsum().round(2).tolist()}
+        out["curves"][key] = {"d": t["date"].dt.strftime("%Y-%m-%d").tolist(), "eq": t["pnl"].cumsum().round(2).tolist()}
         y = t.groupby(t["date"].dt.year)["pnl"].agg(["count", "sum"]).round(1)
-        out["yearly"][k] = {int(i): [int(a), float(b)] for i, (a, b) in y.iterrows()}
-        if k == "final":
-            out["acct_curve"] = {"d": sim["date"].dt.strftime("%Y-%m-%d").tolist(),
-                                 "cap": sim["cap"].round(0).tolist(), "n": sim["n"].tolist()}
-    f = tdf["final"]
-    f["dd"] = f["pnl"].cumsum() - f["pnl"].cumsum().cummax()
-    out["final_dd"] = f["dd"].round(2).tolist()
-    out["final_delta"] = f["delta"].tolist()
-    out["worst"] = f.nsmallest(10, "pnl").assign(date=lambda x: x["date"].dt.strftime("%Y-%m-%d"),
-                                                 expir=lambda x: x["expir"].dt.strftime("%Y-%m-%d")).round(3).to_dict("records")
-    lg = pd.DataFrame(log)
-    out["rule_counts"] = lg["code"].value_counts().to_dict()
-    out["by_code"] = f.groupby("code")["pnl"].agg(["count", "mean", "sum"]).round(2).reset_index().to_dict("records")
-    out["otm_median"] = {str(k): float(v) for k, v in f.groupby("delta")["otm"].median().items()}
+        out["yearly"][key] = {int(i): [int(a), float(b)] for i, (a, b) in y.iterrows()}
+        return acct
 
-    # 規則消融：一次拿掉一條
-    abl = []
-    for nm, mod in (("全部規則", {}), ("拿掉 R2（太平靜）", dict(rv_min=-1)),
-                    ("拿掉 R3（反彈陷阱）", dict(rebound_ret=9)), ("拿掉 R5（收低檔）", dict(es_low_pos=-1))):
-        p = dict(PARAMS, **mod)
-        rs = []
-        for i, d in enumerate(days[:-1]):
-            if d < START or d not in by_day:
-                continue
-            e = days[i + 1]
-            g = by_day[d]
-            g = g[g["expir"] == e]
-            if g.empty:
-                continue
-            delta, _, _ = decide(ind.loc[d], e, es_pos.get(d, np.nan), p)
-            if delta is None:
-                continue
-            r = pick(g, delta)
-            if r is None:
-                continue
-            settle = close.get(e, spot.get(e))
-            rs.append(dict(date=d, pnl=r["pBidPx"] - max(r["strike"] - settle, 0) - p["fee_pts"]))
-        abl.append(stats(pd.DataFrame(rs), nm))
-    out["ablation"] = abl
+    tdf_active = None
+    for hi, cpi in presets:
+        key, p, log = preset_key(hi, cpi), make_params(hi, cpi), []
+        t = run(*args, p, log)
+        acct = add(key, preset_name(hi, cpi), t)
+        t["dd"] = t["pnl"].cumsum() - t["pnl"].cumsum().cummax()
+        abl = [stats(t, "全部規則")]
+        for nm, pp in (("拿掉 R1（事件日全部照做）", None), ("拿掉 R2（太平靜）", dict(rv_min=-1)),
+                       ("拿掉 R3（反彈陷阱）", dict(rebound_ret=9)), ("拿掉 R5（收低檔）", dict(es_low_pos=-1))):
+            if pp is None:
+                import strategy
+                saved = strategy.EVENTS
+                strategy.EVENTS = {}
+                try:
+                    abl.append(stats(run(*args, p), nm))
+                finally:
+                    strategy.EVENTS = saved
+            else:
+                abl.append(stats(run(*args, dict(p, **pp)), nm))
+        out["detail"][key] = dict(
+            acct_curve={"d": acct["date"].dt.strftime("%Y-%m-%d").tolist(), "cap": acct["cap"].round(0).tolist(), "n": acct["n"].tolist()},
+            dd=t["dd"].round(2).tolist(), delta=t["delta"].tolist(),
+            worst=t.nsmallest(10, "pnl").assign(date=lambda x: x["date"].dt.strftime("%Y-%m-%d"),
+                                                expir=lambda x: x["expir"].dt.strftime("%Y-%m-%d")).round(3).to_dict("records"),
+            rule_counts=pd.DataFrame(log)["code"].value_counts().to_dict(),
+            by_code=t.groupby("code")["pnl"].agg(["count", "mean", "sum"]).round(2).reset_index().to_dict("records"),
+            otm_median={str(k): float(v) for k, v in t.groupby("delta")["otm"].median().items()}, ablation=abl)
+        if key == active:
+            tdf_active = t
+    add("fixed5", "固定 5Δ（只跳事件日）", run_fixed(days, by_day, ind, close, spot, 0.05))
+    add("fixed30", "固定 30Δ（只跳事件日）", run_fixed(days, by_day, ind, close, spot, 0.30))
+
+    show = ("key", "name", "n", "total", "maxdd", "worst", "sharpe", "sharpe_h1", "sharpe_h2", "cagr_100k")
+    for s_ in out["summary"]:
+        print(("* " if s_["key"] == active else "  ") + str({k: (round(v, 3) if isinstance(v, float) else v) for k, v in s_.items() if k in show}))
+    for s_ in out["detail"][active]["ablation"]:
+        print("   ", {k: (round(v, 3) if isinstance(v, float) else v) for k, v in s_.items() if k in show})
+    print(out["detail"][active]["rule_counts"])
     if os.environ.get("NO_WRITE"):
-        for s_ in out["summary"] + abl:
-            print({k: (round(v, 3) if isinstance(v, float) else v) for k, v in s_.items() if k in ("name","n","total","maxdd","worst","sharpe","sharpe_h1","sharpe_h2","cagr_100k")})
         return
     (OUT / "backtest.json").write_text(json.dumps(out, ensure_ascii=False, default=str), encoding="utf-8")
-    f.to_csv(OUT / "trades_final.csv", index=False, encoding="utf-8-sig")
-    for s in out["summary"] + abl:
-        print({k: (round(v, 3) if isinstance(v, float) else v) for k, v in s.items()})
-    print(out["rule_counts"])
+    tdf_active.to_csv(OUT / "trades_final.csv", index=False, encoding="utf-8-sig")
 
 
 if __name__ == "__main__":

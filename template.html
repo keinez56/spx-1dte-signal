@@ -7,7 +7,7 @@
   --bg:#f3f5f8; --panel:#ffffff; --ink:#152033; --muted:#5b6678; --line:#d9dee7;
   --accent:#1f5fbf; --sell:#127a52; --sell-bg:#e3f4ec; --small:#9a6a00; --small-bg:#fbf1d9;
   --skip:#a2372f; --skip-bg:#f8e5e3; --grid:#e8ecf2;
-  --c1:#1f5fbf; --c2:#127a52; --c3:#b0731a; --c4:#8a93a3;
+  --c1:#1f5fbf; --c2:#127a52; --c3:#b0731a; --c4:#8a93a3; --c5:#8d4bb0; --c6:#b5483f;
   --f-display:"IBM Plex Sans","Noto Sans TC",system-ui,sans-serif;
   --f-body:"Noto Sans TC","IBM Plex Sans",system-ui,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -16,12 +16,12 @@
   --bg:#0f141c; --panel:#171e29; --ink:#e6ebf3; --muted:#97a2b4; --line:#2a3443;
   --accent:#6ea3ff; --sell:#4cc795; --sell-bg:#15332a; --small:#e7b54d; --small-bg:#3a2e12;
   --skip:#f08a80; --skip-bg:#3d1f1d; --grid:#222b38;
-  --c1:#6ea3ff; --c2:#4cc795; --c3:#e7b54d; --c4:#7d8799; color-scheme:dark}}
+  --c1:#6ea3ff; --c2:#4cc795; --c3:#e7b54d; --c4:#7d8799; --c5:#c08be0; --c6:#e8837a; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f141c; --panel:#171e29; --ink:#e6ebf3; --muted:#97a2b4; --line:#2a3443;
   --accent:#6ea3ff; --sell:#4cc795; --sell-bg:#15332a; --small:#e7b54d; --small-bg:#3a2e12;
   --skip:#f08a80; --skip-bg:#3d1f1d; --grid:#222b38;
-  --c1:#6ea3ff; --c2:#4cc795; --c3:#e7b54d; --c4:#7d8799; color-scheme:dark}
+  --c1:#6ea3ff; --c2:#4cc795; --c3:#e7b54d; --c4:#7d8799; --c5:#c08be0; --c6:#e8837a; color-scheme:dark}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
 .wrap{max-width:1080px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
 h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.25}
@@ -109,7 +109,9 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
       <div class="checks" id="t-checks"><div class="eyebrow">規則檢查</div></div>
     </div>
     <div>
-      <div class="eyebrow" style="margin-bottom:6px">接下來 45 天的事件日（到期日落在這些天就不做）</div>
+      <div class="eyebrow" style="margin-bottom:6px">目前設定：<span id="cfg-name"></span></div>
+      <div class="muted" style="font-size:.82rem;margin-bottom:10px">改 repo 裡的 strategy_config.json（hi_delta：0.30 或 0.20；trade_cpi：true 或 false）再 push，訊號和下方回測會一起切換。</div>
+      <div class="eyebrow" style="margin-bottom:6px">接下來 45 天的事件日（到期日落在這些天就不做<span id="ev-cpi"></span>）</div>
       <div class="events" id="events"></div>
     </div>
   </section>
@@ -127,7 +129,7 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
     <div class="panel">
       <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><h3 style="font-size:1rem">累積損益（SPX 點，1 口）</h3><div class="legend" id="lg"></div></div>
       <div class="chartbox"><canvas id="cEq" aria-label="累積損益圖"></canvas></div>
-      <h3 style="font-size:.95rem;margin-top:14px">最終方案回撤</h3>
+      <h3 style="font-size:.95rem;margin-top:14px">目前設定的回撤</h3>
       <div class="chartbox sm"><canvas id="cDd" aria-label="回撤圖"></canvas></div>
     </div>
     <div class="grid2">
@@ -138,7 +140,7 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
       </div>
     </div>
     <div class="grid2">
-      <div class="panel tbl"><h3 style="font-size:1rem;margin-bottom:8px">最差 10 筆（最終方案）</h3><table id="worst"><thead><tr><th>進場</th><th class="n">Δ</th><th class="n">履約價</th><th class="n">收</th><th class="n">結算</th><th class="n">損益</th></tr></thead><tbody></tbody></table></div>
+      <div class="panel tbl"><h3 style="font-size:1rem;margin-bottom:8px">最差 10 筆（目前設定）</h3><table id="worst"><thead><tr><th>進場</th><th class="n">Δ</th><th class="n">履約價</th><th class="n">收</th><th class="n">結算</th><th class="n">損益</th></tr></thead><tbody></tbody></table></div>
       <div class="panel"><h3 style="font-size:1rem;margin-bottom:8px">10 萬美元帳戶（保證金 SPX×20／口，整數口數，獲利滾入）</h3><div class="chartbox"><canvas id="cAc" aria-label="資金曲線"></canvas></div></div>
     </div>
   </section>
@@ -148,17 +150,18 @@ ul.notes{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;
     <div class="panel" style="display:flex;flex-direction:column;gap:14px">
       <p style="margin:0">每個交易日用 SPX 官方收盤價和當日 K 棒判斷一次（網頁約在美東 16:15 更新，台灣冬令 05:15、夏令 04:15），賣「下一個交易日到期」的 SPX put 1 口，賣在 bid，持有到結算。依序檢查，碰到第一條不做就停：</p>
       <ol class="rules">
-        <li><b>R1 事件日不做</b>：到期日當天有 CPI、非農（NFP）或 FOMC 利率決議。</li>
+        <li><b>R1 事件日不做</b>：到期日當天有<span class="cfg-ev">CPI、非農（NFP）或 FOMC 利率決議</span>。</li>
         <li><b>R2 太平靜不做</b>：10 日已實現波動低於 9%（最近 10 個日對數報酬的標準差 × √252，今天用當下價格）。</li>
         <li><b>R3 反彈陷阱不做</b>：今天漲超過 1.5%，但價格仍在 20 日均線之下。</li>
-        <li><b>R4 分層</b>：價格比 20 日均線高 1% 以上賣 30Δ，否則賣 4Δ。</li>
-        <li><b>R5 收低檔降級</b>：SPX 現貨當日 K 棒收在振幅最低 30%，R4 的 30Δ 降為 4Δ。（原本用 ES 期貨，改用現貨後回測幾乎相同：Sharpe 3.62 對 3.68，前後兩段更一致。）</li>
+        <li><b>R4 分層</b>：價格比 20 日均線高 1% 以上賣 <span class="cfg-hi">30Δ</span>，否則賣 4Δ。</li>
+        <li><b>R5 收低檔降級</b>：SPX 現貨當日 K 棒收在振幅最低 30%，R4 的 <span class="cfg-hi">30Δ</span> 降為 4Δ。（原本用 ES 期貨，改用現貨後回測幾乎相同：Sharpe 3.62 對 3.68，前後兩段更一致。）</li>
       </ol>
       <p style="margin:0" class="muted">部位：每 SPX×20 美元保證金 1 口，不因 IV 調口數，不停損。被履約時當天平掉，不抱期貨等回本（回測抱 5 天的回撤從 75 點變 500 點以上）。手續費每口 2.82 美元已扣。</p>
     </div>
     <ul class="notes">
       <li>結算價用 SPX 官方收盤（Yahoo ^GSPC）。月選到期日同時有 AM、PM 兩條鏈時取 PM（SPXW）那條。</li>
-      <li>參數是看過 2019 後資料挑的。逐年滾動驗證的結果比較接近保守版 20Δ/4Δ，實際預期建議看那一列。</li>
+      <li>參數是看過 2019 後資料挑的。逐年滾動驗證的結果比較接近高檔 20Δ 的版本，實際預期建議看那一列。</li>
+      <li>回測表列出四種設定（高檔 30Δ 或 20Δ × CPI 日做或不做），反白那一列是目前訊號使用的設定。20Δ 的 Sharpe 較高但每年點數較少；CPI 日照做多約 15 點／年，樣本只有約 60 筆。</li>
       <li>最差單筆不是上限：像 2026-11-05 跌 4.4% 那種日子，4Δ 也會賠 170 點以上；那天是靠 R3 躲掉的。</li>
       <li>建議履約價是估算（回測裡的「價外% ÷ VIX」中位數乘上當下 VIX），下單時以券商顯示的 delta 為準。</li>
       <li>你實際做的是 ES put、台灣早上進場。平日差別很小，但週五收盤前進場的那一筆權利金最厚，晚到週日才進會少賺約兩成。</li>
@@ -183,6 +186,12 @@ const wk = d => '日一二三四五六'[new Date(d+'T12:00:00').getDay()];
 function renderToday(){
   const s=SG; const t=$('#today');
   $('#gen').textContent = '更新於 '+s.generated;
+  const cfg=s.config||{hi_delta:0.30,trade_cpi:false,key:'h30',name:'4Δ/30Δ，CPI 日不做'};
+  const hiL=Math.round(cfg.hi_delta*100)+'Δ';
+  $('#cfg-name').textContent=cfg.name;
+  $('#ev-cpi').textContent=cfg.trade_cpi?'；只有 CPI 的日子照做':'';
+  document.querySelectorAll('.cfg-hi').forEach(e=>e.textContent=hiL);
+  document.querySelectorAll('.cfg-ev').forEach(e=>e.textContent=cfg.trade_cpi?'非農（NFP）或 FOMC 利率決議（只有 CPI 的日子照常做）':'CPI、非農（NFP）或 FOMC 利率決議');
   const cls = s.delta==null?'skip':(s.delta>=0.2?'sell':'small');
   t.classList.add(cls);
   $('#t-day').textContent = `${s.signal_day}（週${wk(s.signal_day)}）收盤 → ${s.expiry}（週${wk(s.expiry)}）到期`;
@@ -198,10 +207,10 @@ function renderToday(){
   $('#t-warn').textContent=w.join(' ');
   $('#t-checks').insertAdjacentHTML('beforeend', s.checks.map((c,i)=>{
     let p;
-    if(i===3) p = c.hit?'<span class="pill hi">30Δ</span>':'<span class="pill lo">4Δ</span>';
+    if(i===3) p = c.hit?'<span class="pill hi">'+hiL+'</span>':'<span class="pill lo">4Δ</span>';
     else p = c.hit?'<span class="pill on">觸發</span>':'<span class="pill off">未觸發</span>';
     return `<div class="chk">${p}<div><span class="t">${esc(c.rule)}</span> <span class="v">${esc(c.value)}</span></div><div class="note">${esc(c.note)}</div></div>`;}).join(''));
-  $('#events').innerHTML = s.upcoming_events.map(e=>`<span class="ev"><b>${e.date.slice(5)}</b>週${wk(e.date)} ${e.event}</span>`).join('') || '<span class="muted">無</span>';
+  $('#events').innerHTML = s.upcoming_events.map(e=>`<span class="ev"${e.skip===false?' style="opacity:.55"':''}><b>${e.date.slice(5)}</b>週${wk(e.date)} ${e.event}${e.skip===false?'（照做）':''}</span>`).join('') || '<span class="muted">無</span>';
   $('#hist tbody').innerHTML = s.history.map(h=>{
     const pill = h.delta==null?'<span class="pill on">不做</span>':(h.delta>=0.2?'<span class="pill hi">'+dlab(h.delta)+'</span>':'<span class="pill lo">'+dlab(h.delta)+'</span>');
     const nr = h.next_ret==null?'<span class="muted">待結算</span>':`<span class="${h.next_ret<0?'neg':'pos'}">${sgn(h.next_ret)}</span>`;
@@ -211,17 +220,22 @@ function renderToday(){
 
 function renderBT(){
   const b=BT; $('#dend').textContent=b.data_end;
-  const order=['final','cons20','fixed5','fixed30'];
-  const cols=['--c1','--c2','--c3','--c4'];
-  $('#summary tbody').innerHTML=b.summary.map((s,i)=>`<tr${i===0?' class="hl"':''}><td>${esc(s.name)}</td><td class="n">${s.n}</td><td class="n">${pct(s.win)}</td><td class="n">${f2(s.avg)}</td><td class="n">${s.total.toFixed(0)}</td><td class="n">${s.per_year.toFixed(0)}</td><td class="n neg">${s.maxdd.toFixed(0)}</td><td class="n neg">${s.worst.toFixed(0)}</td><td class="n">${f2(s.sharpe)}</td><td class="n">${f1(s.sharpe_h1)}/${f1(s.sharpe_h2)}</td><td class="n">${pct(s.cagr_100k)}</td><td class="n neg">${pct(s.acct_dd)}</td></tr>`).join('');
+  const order=b.order;
+  const want=(SG&&SG.config&&SG.config.key)||b.active;
+  const act=b.detail[want]?want:b.active;
+  const D=b.detail[act];
+  const cols=['--c1','--c2','--c3','--c5','--c4','--c6'];
+  const hiA=Math.round((act.startsWith('h20')?0.20:0.30)*100)+'Δ';
+  if(want!==act) $('#dend').insertAdjacentText('afterend','；目前設定尚未有對應回測，顯示的是 '+act);
+  $('#summary tbody').innerHTML=b.summary.map((s,i)=>`<tr${s.key===act?' class="hl"':''}><td>${esc(s.name)}${s.key===act?'（目前設定）':''}</td><td class="n">${s.n}</td><td class="n">${pct(s.win)}</td><td class="n">${f2(s.avg)}</td><td class="n">${s.total.toFixed(0)}</td><td class="n">${s.per_year.toFixed(0)}</td><td class="n neg">${s.maxdd.toFixed(0)}</td><td class="n neg">${s.worst.toFixed(0)}</td><td class="n">${f2(s.sharpe)}</td><td class="n">${f1(s.sharpe_h1)}/${f1(s.sharpe_h2)}</td><td class="n">${pct(s.cagr_100k)}</td><td class="n neg">${pct(s.acct_dd)}</td></tr>`).join('');
   $('#lg').innerHTML=b.summary.map((s,i)=>`<span><i style="background:${css(cols[i])}"></i>${esc(s.name)}</span>`).join('');
-  const years=Object.keys(b.yearly.final);
-  $('#yearly').innerHTML='<thead><tr><th>年</th>'+b.summary.map(s=>`<th class="n">${esc(s.name.split('（')[0])}</th>`).join('')+'</tr></thead><tbody>'+
+  const years=Object.keys(b.yearly[act]);
+  $('#yearly').innerHTML='<thead><tr><th>年</th>'+b.summary.map(s=>`<th class="n">${esc(s.name.split('（')[0].replace('，CPI 日',' CPI'))}</th>`).join('')+'</tr></thead><tbody>'+
     years.map(y=>'<tr><td class="mono">'+y+'</td>'+order.map(k=>{const v=b.yearly[k][y];return v?`<td class="n ${v[1]<0?'neg':''}">${v[1].toFixed(0)} <span class="muted">(${v[0]})</span></td>`:'<td class="n">–</td>'}).join('')+'</tr>').join('')+'</tbody>';
-  $('#abl tbody').innerHTML=b.ablation.map((s,i)=>`<tr${i===0?' class="hl"':''}><td>${esc(s.name)}</td><td class="n">${s.n}</td><td class="n">${s.total.toFixed(0)}</td><td class="n neg">${s.maxdd.toFixed(0)}</td><td class="n">${f2(s.sharpe)}</td></tr>`).join('');
-  const cn={R4H:'乖離 ≥1% 賣 30Δ',R4L:'乖離 <1% 賣 4Δ',R5:'收低檔降為 4Δ'};
-  $('#bycode tbody').innerHTML=b.by_code.map(r=>`<tr><td>${cn[r.code]||r.code}</td><td class="n">${r.count}</td><td class="n">${f2(r.mean)}</td><td class="n">${r.sum.toFixed(0)}</td></tr>`).join('');
-  $('#worst tbody').innerHTML=b.worst.map(w=>`<tr><td class="mono">${w.date}</td><td class="n">${dlab(w.delta)}</td><td class="n">${w.strike.toFixed(0)}</td><td class="n">${f2(w.bid)}</td><td class="n">${f2(w.settle)}</td><td class="n neg">${f1(w.pnl)}</td></tr>`).join('');
+  $('#abl tbody').innerHTML=D.ablation.map((s,i)=>`<tr${i===0?' class="hl"':''}><td>${esc(s.name)}</td><td class="n">${s.n}</td><td class="n">${s.total.toFixed(0)}</td><td class="n neg">${s.maxdd.toFixed(0)}</td><td class="n">${f2(s.sharpe)}</td></tr>`).join('');
+  const cn={R4H:'乖離 ≥1% 賣 '+hiA,R4L:'乖離 <1% 賣 4Δ',R5:'收低檔降為 4Δ'};
+  $('#bycode tbody').innerHTML=D.by_code.map(r=>`<tr><td>${cn[r.code]||r.code}</td><td class="n">${r.count}</td><td class="n">${f2(r.mean)}</td><td class="n">${r.sum.toFixed(0)}</td></tr>`).join('');
+  $('#worst tbody').innerHTML=D.worst.map(w=>`<tr><td class="mono">${w.date}</td><td class="n">${dlab(w.delta)}</td><td class="n">${w.strike.toFixed(0)}</td><td class="n">${f2(w.bid)}</td><td class="n">${f2(w.settle)}</td><td class="n neg">${f1(w.pnl)}</td></tr>`).join('');
   if(!window.Chart) return;
   Chart.defaults.font.family=css('--f-mono'); Chart.defaults.color=css('--muted'); Chart.defaults.borderColor=css('--grid');
   const base={animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0].raw.x}}},
@@ -229,11 +243,11 @@ function renderBT(){
   // 用最終方案的日期當 x 軸，其他方案按日期對齊（取當日以前最後一個值）
   const all=[...new Set(order.flatMap(k=>b.curves[k].d))].sort();
   const ds=order.map((k,i)=>{const c=b.curves[k];let j=-1,last=null;const data=all.map(d=>{while(j+1<c.d.length&&c.d[j+1]<=d){j++;last=c.eq[j]}return {x:d,y:last}});
-    return {data,borderColor:css(cols[i]),borderWidth:i===0?2.2:1.4,pointRadius:0,tension:0,spanGaps:true}});
+    return {data,borderColor:css(cols[i]),borderWidth:k===act?2.4:1.3,pointRadius:0,tension:0,spanGaps:true}});
   new Chart($('#cEq'),{type:'line',data:{labels:all,datasets:ds},options:base});
-  const fd=b.curves.final.d;
-  new Chart($('#cDd'),{type:'line',data:{labels:fd,datasets:[{data:fd.map((d,i)=>({x:d,y:b.final_dd[i]})),borderColor:css('--skip'),backgroundColor:'color-mix(in srgb,'+css('--skip')+' 18%,transparent)',fill:true,borderWidth:1.2,pointRadius:0}]},options:base});
-  const ac=b.acct_curve;
+  const fd=b.curves[act].d;
+  new Chart($('#cDd'),{type:'line',data:{labels:fd,datasets:[{data:fd.map((d,i)=>({x:d,y:D.dd[i]})),borderColor:css('--skip'),backgroundColor:'color-mix(in srgb,'+css('--skip')+' 18%,transparent)',fill:true,borderWidth:1.2,pointRadius:0}]},options:base});
+  const ac=D.acct_curve;
   new Chart($('#cAc'),{type:'line',data:{labels:ac.d,datasets:[{data:ac.d.map((d,i)=>({x:d,y:ac.cap[i]})),borderColor:css('--c1'),borderWidth:1.8,pointRadius:0}]},
     options:{...base,scales:{...base.scales,y:{type:'logarithmic',grid:{color:css('--grid')},ticks:{callback:v=>[1e5,2e5,5e5,1e6].includes(v)?(v/1e4)+' 萬':''}}},plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0].raw.x,label:it=>' 資金 '+Math.round(it.raw.y).toLocaleString()+'，'+ac.n[it.dataIndex]+' 口'}}}}});
 }

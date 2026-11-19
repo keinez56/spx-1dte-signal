@@ -10,7 +10,8 @@ ORATS 資料路徑依序找：`--data-dir` 參數 → 環境變數 `ORATS_DATA_D
 | market_data.py | Yahoo 抓 ^GSPC、ES=F、VIX、VIX1D 日 K → cache/ |
 | events.py | CPI / NFP / FOMC 日期（2015–2027，來源 BLS、Fed） |
 | strategy.py | R1–R5 規則（回測與每日訊號共用） |
-| backtest.py | 2016 起回測 → output/backtest.json、trades_final.csv |
+| strategy_config.json | 可切換設定：`hi_delta`（0.30 或 0.20）、`trade_cpi`（true = 只有 CPI 的日子照做）。改完 push，訊號和網頁回測一起切換，不必重跑回測 |
+| backtest.py | 2016 起回測（四種設定 + 兩個對照組）→ output/backtest.json、trades_final.csv |
 | daily_signal.py | 收盤前即時訊號 → output/signal.json |
 | build_page.py | 合成 output/dashboard.html |
 | run_daily.py | 排程入口，只在 15:25–16:30 ET 執行（--force 強制） |

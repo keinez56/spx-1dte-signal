@@ -14,7 +14,7 @@ import yfinance as yf
 
 from common import OUT
 from events import EVENTS
-from strategy import PARAMS, decide, indicators
+from strategy import CONFIG, PARAMS, decide, indicators, preset_key, preset_name, skipped_event
 
 ET = ZoneInfo("America/New_York")
 HOLIDAYS = {pd.Timestamp(x) for x in """
@@ -163,19 +163,20 @@ def main():
         k, prem = estimate(px_now, v_sig, delta)
         est = dict(otm=1 - k / px_now, strike=k, prem=prem)
 
+    HI = round(PARAMS["hi_delta"] * 100)
     checks = [
-        dict(rule="R1 事件日", value=EVENTS.get(expiry, "無"), hit=bool(EVENTS.get(expiry)),
-             note=f"到期日 {expiry:%Y-%m-%d} 有沒有 CPI/NFP/FOMC"),
+        dict(rule="R1 事件日", value=EVENTS.get(expiry, "無"), hit=bool(skipped_event(expiry)),
+             note=f"到期日 {expiry:%Y-%m-%d} 有沒有 " + ("NFP/FOMC（CPI 日依設定照做）" if PARAMS["trade_cpi"] else "CPI/NFP/FOMC")),
         dict(rule="R2 太平靜", value=f"{row['rv10']:.1%}", hit=bool(row["rv10"] < PARAMS["rv_min"]),
              note="10 日已實現波動 < 9% 不做"),
         dict(rule="R3 反彈陷阱", value=f"今日 {np.expm1(row['ret']):+.2%}／乖離 {row['bias']:+.2%}",
              hit=bool(np.expm1(row["ret"]) > PARAMS["rebound_ret"] and row["bias"] < 0),
              note="漲 > 1.5% 且在 20 日均線下不做"),
         dict(rule="R4 分層", value=f"乖離 {row['bias']:+.2%}（20MA {row['ma20']:.0f}）",
-             hit=bool(row["bias"] >= PARAMS["bias_hi"]), note="乖離 ≥ 1% 賣 30Δ，否則 4Δ"),
+             hit=bool(row["bias"] >= PARAMS["bias_hi"]), note=f"乖離 ≥ 1% 賣 {HI}Δ，否則 4Δ"),
         dict(rule="R5 收低檔", value=(f"{es_pos:.0%}" if np.isfinite(es_pos) else "無資料"),
              hit=bool(np.isfinite(es_pos) and es_pos < PARAMS["es_low_pos"]),
-             note="SPX 現貨收在當日振幅最低 30% → 30Δ 降為 4Δ"),
+             note=f"SPX 現貨收在當日振幅最低 30% → {HI}Δ 降為 4Δ"),
     ]
     out = dict(
         generated=now_et.strftime("%Y-%m-%d %H:%M ET"), signal_day=f"{sig_day:%Y-%m-%d}",
@@ -183,7 +184,8 @@ def main():
         action="SELL" if delta else "SKIP", delta=delta, code=code, why=why,
         spx=px_now, spx_time=px_time, vix=vix_now, est=est, es=es_info, checks=checks,
         history=history_signals(daily[daily.index <= sig_day], daily, vix),
-        upcoming_events=[dict(date=f"{d:%Y-%m-%d}", event=v) for d, v in sorted(EVENTS.items())
+        config=dict(CONFIG, key=preset_key(**CONFIG), name=preset_name(**CONFIG)),
+        upcoming_events=[dict(date=f"{d:%Y-%m-%d}", event=v, skip=bool(skipped_event(d))) for d, v in sorted(EVENTS.items())
                          if today <= d <= today + pd.Timedelta(days=45)],
     )
     (OUT / "signal.json").write_text(json.dumps(out, ensure_ascii=False, default=str, indent=1), encoding="utf-8")

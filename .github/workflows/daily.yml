@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy2.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,6 +54,16 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+      # deploy-pages 偶爾會在 artifact 剛上傳完時查不到它（"No artifacts named github-pages"），
+      # 所以先等幾秒，失敗再等 30 秒重試一次。
+      - if: steps.sig.outputs.result == 'RESULT=UPDATED'
+        run: sleep 10
       - if: steps.sig.outputs.result == 'RESULT=UPDATED'
         id: deploy
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - if: steps.sig.outputs.result == 'RESULT=UPDATED' && steps.deploy.outcome == 'failure'
+        run: sleep 30
+      - if: steps.sig.outputs.result == 'RESULT=UPDATED' && steps.deploy.outcome == 'failure'
+        id: deploy2
         uses: actions/deploy-pages@v4
